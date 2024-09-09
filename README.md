@@ -5,3 +5,5 @@ Slice of ERA5 data is regridded to model resolution
 By default the notebook uses intermediate deterministic NeuralGCM 1.4° model. 
 Predictions are made for all variables on all pressure levels
 At the end, you can compare outputs of NeuralGCM redictions to ERA5 reanalysis. 
+
+Test code are some attempted changes to extract only 500 mb geoheight and an attempt at extracting surface pressure at a given location. 
