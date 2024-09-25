@@ -24,8 +24,11 @@ NC_coords = {'longitude': 277.45, 'latitude': 35.59}  # Asheville, NC
 
 def plot_temp_era5(file_path2, region='SE'):
     ds = xr.open_dataset(file_path2)
-    time_index = 6
-    print("Selected time:", ds.time.isel(time=time_index).values)
+    #time_index = 0
+    #print("Selected time:", ds.time.isel(time=time_index).values)
+    
+    time_index = ds.time.sel(time='2011-07-27T18:00:00', method='nearest')
+    print("Selected time:", time_index.values)
 
     if region == 'NH':
         projection = ccrs.NorthPolarStereo(central_longitude=-100)
@@ -40,7 +43,7 @@ def plot_temp_era5(file_path2, region='SE'):
         projection = ccrs.PlateCarree()
         extent = [260, 290, 25, 40]
         
-    temp_data = ds.temperature.isel(time=time_index)
+    temp_data = ds['2m_temperature'].isel(time=time_index)
     temp_c = temp_data - 273.15  # Convert from Kelvin to Celsius
     
     plt.figure(figsize=(10, 8))
@@ -50,7 +53,7 @@ def plot_temp_era5(file_path2, region='SE'):
     ax.add_feature(cfeature.BORDERS, linestyle=':')
     ax.add_feature(cfeature.STATES, linestyle=':')
     
-    temp_plot = temp_c.T.plot.contourf(
+    temp_plot = temp_c.plot.contourf(
         ax=ax, cmap='coolwarm', extend='both', levels=color_bins, add_colorbar=False
     )
     
@@ -76,12 +79,12 @@ def plot_temp_era5(file_path2, region='SE'):
         color='cyan', zorder=5, transform=ccrs.PlateCarree()
     )
     
-    ax.set_title('ERA5 Temperature 08/07/2011')
+    ax.set_title('ERA5 Temperature')
     plt.show()
 
 # File paths to your datasets
 file_path = '/Users/ennisk/anaconda3/Temp_ngcm_regrid_aug2011.nc'
-file_path2 = '/Users/ennisk/anaconda3/ERA5_aug2011_temp.nc'
+file_path2 = '/Users/ennisk/anaconda3/ERA5_aug2011_2mtemp.nc'
 
 
 plot_temp_era5(file_path2, region='SE')
