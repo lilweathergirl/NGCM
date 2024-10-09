@@ -80,8 +80,8 @@ era5_path = 'gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v
 full_era5 = xarray.open_zarr(gcs.get_mapper(era5_path), chunks=None)
 
 
-demo_start_time = '2002-05-22'
-demo_end_time = '2002-06-01'
+demo_start_time = '2011-07-25'
+demo_end_time = '2011-08-14'
 data_inner_steps = 24  # process every 24th hour
 
 sliced_era5 = (
@@ -116,7 +116,7 @@ See {doc}`trained_models` for details.
 """
 
 inner_steps = 24  # save model outputs once every 24 hours
-outer_steps = 10 * 24 // inner_steps  # total of 10
+outer_steps = 21 * 24 // inner_steps  # total of 20
 timedelta = np.timedelta64(1, 'h') * inner_steps
 times = (np.arange(outer_steps) * inner_steps)  # time axis in hours
 
@@ -139,35 +139,85 @@ final_state, predictions = model.unroll(
 )
 predictions_ds = model.data_to_xarray(predictions, times=times)
 
-#geopotential_500mb = predictions_ds.sel(level=500)
-#temp = predictions_ds.sel(level=860)
 geopotential_500mb = predictions_ds.sel(level=500)
-
-output_directory = '/home/ennisk'
-# os.makedirs(output_directory, exist_ok=True)
-# output_path_nc = os.path.join(output_directory, 'NGCM_may2002_500mb.nc')
+temp = predictions_ds.sel(level=1000)
 
 
-# predictions_ds_500mb = xarray.Dataset({
-#     'geopotential': geopotential_500mb.geopotential
-# })
+output_directory = '/home/ennisk/NGCM'
+os.makedirs(output_directory, exist_ok=True)
+output_path_nc = os.path.join(output_directory, 'NGCM__500mb.nc')
+
+
+predictions_ds_500mb = xarray.Dataset({
+    'geopotential': geopotential_500mb.geopotential
+})
 
 # Save to NetCDF
 #predictions_ds_500mb.to_netcdf(output_path_nc)
 
-# predictions_ds_temp = xarray.Dataset({
-#     'temperature': temp.temperature
-# })
+predictions_ds_temp = xarray.Dataset({
+    'temperature': temp.temperature
+})
 
-# # Save to NetCDF
-# output_path_nc = os.path.join(output_directory, 'NGCM_may2002_temp.nc')
-# predictions_ds_temp.to_netcdf(output_path_nc)
+# Save to NetCDF
+output_path_nc = os.path.join(output_directory, 'NGCM_aug2011_temp.nc')
+#predictions_ds_temp.to_netcdf(output_path_nc)
 
 
 """## Compare forecast to ERA5
 
 See [WeatherBench2](https://sites.research.google/weatherbench/) for more comprehensive evaluations and archived NeuralGCM forecasts.
 """
+                 # geopotential height plotting
+# target_trajectory = model.inputs_from_xarray(
+#     eval_era5
+#     .thin(time=(inner_steps // data_inner_steps))
+#     .isel(time=slice(outer_steps))
+# )
+# target_data_ds = model.data_to_xarray(target_trajectory, times=times)
+
+# era5_geopotential_500mb = target_data_ds.sel(level=500)['geopotential']
+# ngcm_geopotential_500mb = predictions_ds.sel(level=500)['geopotential']
+
+# # Combine both datasets into a single dataset for comparison
+# combined_ds_500mb = xr.concat(
+#     [era5_geopotential_500mb, ngcm_geopotential_500mb], 
+#     dim='model'
+# )
+# combined_ds_500mb.coords['model'] = ['ERA5', 'NeuralGCM']
+
+# # Specify the output file path
+# output_path_nc = '/home/ennisk/NGCM_ERA5_500mb_geopotential_aug2011.nc'
+
+# # Save the combined dataset to a NetCDF file
+# #combined_ds_500mb.to_netcdf(output_path_nc)
+
+#                     # sfc temp plotting
+# target_trajectory = model.inputs_from_xarray(
+#     eval_era5
+#     .thin(time=(inner_steps // data_inner_steps))
+#     .isel(time=slice(outer_steps))
+# )
+# target_data_ds = model.data_to_xarray(target_trajectory, times=times)
+
+# era5_temp_sfc = target_data_ds.sel(level=1000)['temperature']
+# ngcm_temp_sfc = predictions_ds.sel(level=1000)['temperature']
+
+# # Combine both datasets into a single dataset for comparison
+# combined_ds_temp = xr.concat(
+#     [era5_temp_sfc, ngcm_temp_sfc], 
+#     dim='model'
+# )
+# combined_ds_temp.coords['model'] = ['ERA5', 'NeuralGCM']
+
+# # Specify the output file path
+# output_path_nc = '/home/ennisk/NGCM_ERA5_aug2011_sfc_temp.nc'
+
+# Save the combined dataset to a NetCDF file
+#combined_ds_temp.to_netcdf(output_path_nc)
+##############################################3
+
+# only era5
 
 target_trajectory = model.inputs_from_xarray(
     eval_era5
@@ -176,34 +226,12 @@ target_trajectory = model.inputs_from_xarray(
 )
 target_data_ds = model.data_to_xarray(target_trajectory, times=times)
 
-era5_geopotential_500mb = target_data_ds.sel(level=500)['geopotential']
-ngcm_geopotential_500mb = predictions_ds.sel(level=500)['geopotential']
+era5_temp_sfc = target_data_ds.sel(level=500)['geopotential']
 
-# Combine both datasets into a single dataset for comparison
-combined_ds_500mb = xr.concat(
-    [era5_geopotential_500mb, ngcm_geopotential_500mb], 
-    dim='model'
-)
-combined_ds_500mb.coords['model'] = ['ERA5', 'NeuralGCM']
+# Specify the output path for the NetCDF file
+output_path_era5 = '/home/ennisk/NGCM/ERA5_aug2011_500mb.nc'
 
-# Specify the output file path
-output_path_nc = '/home/ennisk/NGCM_ERA5_500mb_geopotential_comparison.nc'
-
-# Save the combined dataset to a NetCDF file
-combined_ds_500mb.to_netcdf(output_path_nc)
-
-# combined_ds = xarray.concat([target_data_ds, predictions_ds], 'model')
-# combined_ds.coords['model'] = ['ERA5', 'NeuralGCM']
-# output_file_path = '/home/ennisk/combined_trajectories_geo.nc'
-# combined_ds.to_netcdf(output_file_path)
-# # Visualize ERA5 vs NeuralGCM trajectories
-# combined_ds.temperature.sel(level=500).plot(
-#     x='longitude', y='latitude', row='time', col='model', robust=True, aspect=2, size=2
-# )
-
-# plot_path = os.path.join(
-#     output_directory, 'ERA5_vs_NeuralGCM_temp_comparison.png')
-# plt.savefig(plot_path, dpi=400, bbox_inches='tight')
-# plt.close()
+# Save the ERA5 surface temperature data to a NetCDF file
+era5_temp_sfc.to_netcdf(output_path_era5)
 
 
