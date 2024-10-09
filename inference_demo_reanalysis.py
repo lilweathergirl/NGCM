@@ -65,178 +65,101 @@ Pre-trained model checkpoints from the NeuralGCM paper are [available for downlo
 """
 
 # @param ['neural_gcm_dynamic_forcing_deterministic_0_7_deg.pkl', 'neural_gcm_dynamic_forcing_deterministic_1_4_deg.pkl', 'neural_gcm_dynamic_forcing_deterministic_2_8_deg.pkl', 'neural_gcm_dynamic_forcing_stochastic_1_4_deg.pkl'] {type: "string"}
-model_name = 'neural_gcm_dynamic_forcing_deterministic_1_4_deg.pkl'
+# model_name = 'neural_gcm_dynamic_forcing_deterministic_1_4_deg.pkl'
 
-with gcs.open(f'gs://gresearch/neuralgcm/04_30_2024/{model_name}', 'rb') as f:
-    ckpt = pickle.load(f)
+# with gcs.open(f'gs://gresearch/neuralgcm/04_30_2024/{model_name}', 'rb') as f:
+#     ckpt = pickle.load(f)
 
-model = neuralgcm.PressureLevelModel.from_checkpoint(ckpt)
+# model = neuralgcm.PressureLevelModel.from_checkpoint(ckpt)
 
-"""## Load ERA5 data from GCP/Zarr
+# """## Load ERA5 data from GCP/Zarr
 
-See {doc}`datasets` for details.
+# See {doc}`datasets` for details.
 
-Select out a few days of data:
-"""
+# Select out a few days of data:
+# """
 
+# era5_path = 'gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3'
+# full_era5 = xarray.open_zarr(gcs.get_mapper(era5_path), chunks=None)
+
+
+# demo_start_time = '2011-07-27'
+# demo_end_time = '2011-08-14'
+# data_inner_steps = 24  # process every 24th hour
+
+# sliced_era5 = (
+#     full_era5
+#     [model.input_variables + model.forcing_variables]
+#     .pipe(
+#         xarray_utils.selective_temporal_shift,
+#         variables=model.forcing_variables,
+#         time_shift='24 hours',
+#     )
+#     .sel(time=slice(demo_start_time, demo_end_time, data_inner_steps))
+#     .compute()
+# )
+
+# """Regrid to NeuralGCM's native resolution:"""
+
+# era5_grid = spherical_harmonic.Grid(
+#     latitude_nodes=full_era5.sizes['latitude'],
+#     longitude_nodes=full_era5.sizes['longitude'],
+#     latitude_spacing=xarray_utils.infer_latitude_spacing(full_era5.latitude),
+#     longitude_offset=xarray_utils.infer_longitude_offset(full_era5.longitude),
+# )
+# regridder = horizontal_interpolation.ConservativeRegridder(
+#     era5_grid, model.data_coords.horizontal, skipna=True
+# )
+# eval_era5 = xarray_utils.regrid(sliced_era5, regridder)
+# eval_era5 = xarray_utils.fill_nan_with_nearest(eval_era5)
+
+# """## Make the forecast
+
+# See {doc}`trained_models` for details.
+# """
+
+# inner_steps = 24  # save model outputs once every 6 or 24 hours
+# outer_steps = 20 * 24 // inner_steps  # total of ## days
+# timedelta = np.timedelta64(1, 'h') * inner_steps
+# times = (np.arange(outer_steps) * inner_steps)  # time axis in hours
+
+# # initialize model state
+# inputs = model.inputs_from_xarray(eval_era5.isel(time=0))
+# input_forcings = model.forcings_from_xarray(eval_era5.isel(time=0))
+# rng_key = jax.random.key(42)  # optional for deterministic models
+# initial_state = model.encode(inputs, input_forcings, rng_key)
+
+# # use persistence for forcing variables (SST and sea ice cover)
+# all_forcings = model.forcings_from_xarray(eval_era5.head(time=1))
+
+# # make forecast
+# final_state, predictions = model.unroll(
+#     initial_state,
+#     all_forcings,
+#     steps=outer_steps,
+#     timedelta=timedelta,
+#     start_with_input=True,
+# )
+# predictions_ds = model.data_to_xarray(predictions, times=times)
+
+
+
+                    
+# Define the path to the full ERA5 dataset (already done earlier)
 era5_path = 'gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3'
 full_era5 = xarray.open_zarr(gcs.get_mapper(era5_path), chunks=None)
 
-
+# Define the demo start and end time
 demo_start_time = '2011-07-27'
-demo_end_time = '2011-08-11'
-data_inner_steps = 24  # process every 24th hour
+demo_end_time = '2011-08-14'
 
-sliced_era5 = (
-    full_era5
-    [model.input_variables + model.forcing_variables]
-    .pipe(
-        xarray_utils.selective_temporal_shift,
-        variables=model.forcing_variables,
-        time_shift='24 hours',
-    )
-    .sel(time=slice(demo_start_time, demo_end_time, data_inner_steps))
-    .compute()
-)
-
-"""Regrid to NeuralGCM's native resolution:"""
-
-era5_grid = spherical_harmonic.Grid(
-    latitude_nodes=full_era5.sizes['latitude'],
-    longitude_nodes=full_era5.sizes['longitude'],
-    latitude_spacing=xarray_utils.infer_latitude_spacing(full_era5.latitude),
-    longitude_offset=xarray_utils.infer_longitude_offset(full_era5.longitude),
-)
-regridder = horizontal_interpolation.ConservativeRegridder(
-    era5_grid, model.data_coords.horizontal, skipna=True
-)
-eval_era5 = xarray_utils.regrid(sliced_era5, regridder)
-eval_era5 = xarray_utils.fill_nan_with_nearest(eval_era5)
-
-"""## Make the forecast
-
-See {doc}`trained_models` for details.
-"""
-
-inner_steps = 6  # save model outputs once every 24 hours
-outer_steps = 15 * 24 // inner_steps  # total of ## days
-timedelta = np.timedelta64(1, 'h') * inner_steps
-times = (np.arange(outer_steps) * inner_steps)  # time axis in hours
-
-# initialize model state
-inputs = model.inputs_from_xarray(eval_era5.isel(time=0))
-input_forcings = model.forcings_from_xarray(eval_era5.isel(time=0))
-rng_key = jax.random.key(42)  # optional for deterministic models
-initial_state = model.encode(inputs, input_forcings, rng_key)
-
-# use persistence for forcing variables (SST and sea ice cover)
-all_forcings = model.forcings_from_xarray(eval_era5.head(time=1))
-
-# make forecast
-final_state, predictions = model.unroll(
-    initial_state,
-    all_forcings,
-    steps=outer_steps,
-    timedelta=timedelta,
-    start_with_input=True,
-)
-predictions_ds = model.data_to_xarray(predictions, times=times)
-
-
-# Define the target grid for 0.25-degree resolution
-target_grid = xr.Dataset(
-    {
-        "lat": (["lat"], np.arange(-90, 90.25, 0.25)),
-        "lon": (["lon"], np.arange(0, 360.25, 0.25)),
-    }
-)
-
-# regridder using bilinear interpolation
-regridder = xe.Regridder(predictions_ds, target_grid, method="bilinear", periodic=True)
-
-
-regridded_predictions = regridder(predictions_ds)
-temp = regridded_predictions.sel(level=1000)
-
-
-#geopotential_500mb = predictions_ds.sel(level=500)
-#temp = predictions_ds.sel(level=1000)
-
-
-output_directory = '/home/ennisk/NGCM'
-os.makedirs(output_directory, exist_ok=True)
-# output_path_nc = os.path.join(output_directory, 'NGCM_may2002_500mb.nc')
-
-
-# predictions_ds_500mb = xarray.Dataset({
-#     'geopotential': geopotential_500mb.geopotential
-# })
-
-#Save to NetCDF
-# predictions_ds_500mb.to_netcdf(output_path_nc)
-
-# predictions_ds_temp = xarray.Dataset({
-#     'temperature': temp.temperature
-# })
-
-# # Save to NetCDF
-# output_path_nc = os.path.join(output_directory, 'NGCM_aug2001_temp.nc')
-# predictions_ds_temp.to_netcdf(output_path_nc)
-
-
-regridded_predictions_temp = xarray.Dataset({
-    'temperature': temp.temperature
-})
-
-#regridded_predictions_temp.to_netcdf("Temp_ngcm_regrid_aug2011.nc")
-
-"""## Compare forecast to ERA5
-
-See [WeatherBench2](https://sites.research.google/weatherbench/) for more comprehensive evaluations and archived NeuralGCM forecasts.
-"""
-                 # geopotential height plotting
-# target_trajectory = model.inputs_from_xarray(
-#     eval_era5
-#     .thin(time=(inner_steps // data_inner_steps))
-#     .isel(time=slice(outer_steps))
-# )
-# target_data_ds = model.data_to_xarray(target_trajectory, times=times)
-
-# era5_geopotential_500mb = target_data_ds.sel(level=500)['geopotential']
-# ngcm_geopotential_500mb = predictions_ds.sel(level=500)['geopotential']
-
-# # Combine both datasets into a single dataset for comparison
-# combined_ds_500mb = xr.concat(
-#     [era5_geopotential_500mb, ngcm_geopotential_500mb], 
-#     dim='model'
-# )
-# combined_ds_500mb.coords['model'] = ['ERA5', 'NeuralGCM']
-
-# # Specify the output file path
-# output_path_nc = '/home/ennisk/NGCM_ERA5_500mb_geopotential_comparison.nc'
-
-# # Save the combined dataset to a NetCDF file
-# combined_ds_500mb.to_netcdf(output_path_nc)
-
-                    
-# target_trajectory = model.inputs_from_xarray(
-#     eval_era5
-#     .thin(time=(inner_steps // data_inner_steps))
-#     .isel(time=slice(outer_steps))
-# )
-# target_data_ds = model.data_to_xarray(target_trajectory, times=times)
-
-#era5_temp_sfc = target_data_ds.sel(level=1000)['temperature']
+# Select the 2m temperature variable and slice for the demo period
 era5_temp_sfc = full_era5['2m_temperature'].sel(time=slice(demo_start_time, demo_end_time))
 
-# Define output path for saving the ERA5 2-meter temperature data
+# Filter out times corresponding to 18z (18:00 UTC) each day
+era5_temp_sfc_18z = era5_temp_sfc.sel(time=era5_temp_sfc['time'].dt.hour == 18)
+
+# Save the result to NetCDF format
 output_path_nc = '/home/ennisk/NGCM/ERA5_aug2011_2mtemp.nc'
+era5_temp_sfc_18z.to_netcdf(output_path_nc)
 
-# Save the selected ERA5 surface temperature data to a NetCDF file
-era5_temp_sfc.to_netcdf(output_path_nc)
-
-# Specify the output path for the NetCDF file
-#output_path_nc = '/home/ennisk/ERA5_aug2011_temp.nc'
-
-# Save the ERA5 surface temperature data to a NetCDF file
-#era5_temp_sfc.to_netcdf(output_path_nc)
